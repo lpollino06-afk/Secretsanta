@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secret Santa</title>
+<style>
+  :root {
+    --bg: #0f2a1d;
+    --card: #fffaf3;
+    --ink: #1f2a24;
+    --muted: #6b7a70;
+    --red: #c0392b;
+    --red-dark: #962d22;
+    --green: #1e6b45;
+    --line: #e8dfd0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(circle at 20% 0%, #1d4a33, var(--bg) 60%);
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  .wrap { width: 100%; max-width: 520px; }
+  h1 { color: #fff; text-align: center; font-size: 2.2rem; margin: 0 0 4px; }
+  .subtitle { color: #cfe3d6; text-align: center; margin: 0 0 24px; }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.3);
+    margin-bottom: 16px;
+  }
+  h2 { margin: 0 0 12px; font-size: 1.25rem; }
+  p { line-height: 1.5; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .row { display: flex; gap: 8px; }
+  input, select, textarea {
+    flex: 1;
+    width: 100%;
+    font: inherit;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    min-width: 0;
+  }
+  textarea { font-size: .8rem; resize: none; height: 70px; color: var(--muted); }
+  button {
+    font: inherit;
+    font-weight: 600;
+    border: 0;
+    border-radius: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    background: var(--green);
+    color: #fff;
+  }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.red { background: var(--red); }
+  button.red:hover:not(:disabled) { background: var(--red-dark); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  button.big { width: 100%; padding: 14px; font-size: 1.1rem; margin-top: 12px; }
+  ul.names { list-style: none; padding: 0; margin: 16px 0 0; }
+  ul.names li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
+    margin-bottom: 6px; background: #fff;
+  }
+  ul.names li button { padding: 4px 10px; background: transparent; color: var(--red); }
+  .count { color: var(--muted); font-size: .9rem; margin-top: 8px; }
+  .reveal { text-align: center; padding: 16px 0 8px; }
+  .gift { font-size: 4rem; display: inline-block; }
+  .gift.shake { animation: shake .6s ease-in-out 2; }
+  @keyframes shake {
+    0%,100% { transform: rotate(0); }
+    25% { transform: rotate(-12deg); }
+    75% { transform: rotate(12deg); }
+  }
+  .result-name {
+    font-size: 2.2rem; font-weight: 800; color: var(--red);
+    margin: 12px 0; animation: pop .4s ease-out;
+  }
+  @keyframes pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .error { color: var(--red); font-size: .9rem; min-height: 1.2em; margin: 8px 0 0; }
+  .ok { color: var(--green); font-size: .9rem; min-height: 1.2em; margin: 8px 0 0; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎅 Secret Santa</h1>
+  <p class="subtitle">Tirage au sort des cadeaux</p>
+
+  <!-- ===== ADMIN : saisie des noms ===== -->
+  <section id="admin" class="card hidden">
+    <h2>Admin — Liste des participants</h2>
+    <p class="muted">Ajoute tous les noms, puis lance le tirage. Tu obtiendras un lien à envoyer à tout le monde.</p>
+    <form id="addForm" class="row">
+      <input id="nameInput" placeholder="Prénom" autocomplete="off">
+      <button type="submit">Ajouter</button>
+    </form>
+    <p id="adminError" class="error"></p>
+    <ul id="nameList" class="names"></ul>
+    <div id="count" class="count"></div>
+    <button id="startBtn" class="big red" disabled>Lancer le Secret Santa 🎁</button>
+  </section>
+
+  <!-- ===== ADMIN : lien à partager ===== -->
+  <section id="share" class="card hidden">
+    <h2>🎉 Tirage prêt !</h2>
+    <p>Envoie ce lien à tous les participants (groupe WhatsApp, SMS…). Chacun choisira son nom et découvrira à qui il offre un cadeau.</p>
+    <p class="muted">Toi non plus tu ne connais pas le résultat : ouvre le lien comme tout le monde pour tirer ton nom.</p>
+    <textarea id="linkBox" readonly></textarea>
+    <button id="copyBtn" class="big">Copier le lien 📋</button>
+    <button id="shareBtn" class="big red hidden">Partager…</button>
+    <p id="copyMsg" class="ok"></p>
+    <button id="restartBtn" class="big ghost">Refaire un nouveau tirage</button>
+  </section>
+
+  <!-- ===== JOUEUR : choix du nom ===== -->
+  <section id="pick" class="card hidden">
+    <h2>Qui es-tu ?</h2>
+    <p class="muted">Choisis <strong>ton</strong> nom dans la liste, puis tire au sort la personne à qui tu offres un cadeau.</p>
+    <select id="whoSelect"></select>
+    <button id="drawBtn" class="big red" disabled>Tirer au sort 🎲</button>
+  </section>
+
+  <!-- ===== JOUEUR : résultat ===== -->
+  <section id="result" class="card hidden">
+    <div class="reveal">
+      <div id="gift" class="gift">🎁</div>
+      <p id="resultIntro"></p>
+      <div id="resultName" class="result-name hidden"></div>
+      <p id="secretNote" class="muted hidden">Garde le secret 🤫</p>
+    </div>
+    <button id="backBtn" class="big ghost hidden">Ce n'est pas moi, revenir</button>
+  </section>
+
+  <!-- ===== Lien invalide ===== -->
+  <section id="invalid" class="card hidden">
+    <h2>Lien invalide 😕</h2>
+    <p>Ce lien de Secret Santa est incomplet ou abîmé. Demande à l'organisateur de te le renvoyer.</p>
+  </section>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const show = (id, on) => $(id).classList.toggle('hidden', !on);
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+  };
+
+  // ---------- Encodage du tirage dans le lien ----------
+  // Le tirage est brouillé (XOR + base64) pour qu'on ne puisse pas lire
+  // les résultats directement dans l'URL.
+  const SECRET = 'ho-ho-ho-joyeux-noel';
+
+  function xor(bytes) {
+    const k = new TextEncoder().encode(SECRET);
+    return bytes.map((b, i) => b ^ k[i % k.length]);
+  }
+  function encode(obj) {
+    const bytes = xor(new TextEncoder().encode(JSON.stringify(obj)));
+    let bin = '';
+    bytes.forEach(b => bin += String.fromCharCode(b));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function decode(str) {
+    const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64);
+    const bytes = xor(Uint8Array.from(bin, c => c.charCodeAt(0)));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  // ---------- Tirage : personne ne se tire soi-même ----------
+  function makeDraw(n) {
+    // Mélange aléatoire jusqu'à obtenir un tirage où personne ne se tire soi-même
+    while (true) {
+      const p = [...Array(n).keys()];
+      for (let i = n - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [p[i], p[j]] = [p[j], p[i]];
+      }
+      if (p.every((v, i) => v !== i)) return p;
+    }
+  }
+
+  // ======================================================
+  //  MODE ADMIN (pas de tirage dans le lien)
+  // ======================================================
+  const ADMIN_KEY = 'secret-santa-admin';
+  let admin = store.get(ADMIN_KEY) || { names: [], link: null };
+
+  function saveAdmin() { store.set(ADMIN_KEY, admin); }
+
+  $('addForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = $('nameInput').value.trim();
+    $('adminError').textContent = '';
+    if (!name) return;
+    if (admin.names.some(n => n.toLowerCase() === name.toLowerCase())) {
+      $('adminError').textContent = 'Ce nom est déjà dans la liste.';
+      return;
+    }
+    admin.names.push(name);
+    $('nameInput').value = '';
+    saveAdmin();
+    renderAdmin();
+    $('nameInput').focus();
+  });
+
+  $('startBtn').addEventListener('click', () => {
+    if (admin.names.length < 3) return;
+    if (!confirm('Lancer le tirage avec ' + admin.names.length + ' participants ?')) return;
+    const data = { v: 1, id: Date.now().toString(36), n: admin.names, a: makeDraw(admin.names.length) };
+    admin.link = location.origin + location.pathname + '#t=' + encode(data);
+    saveAdmin();
+    renderAdmin();
+  });
+
+  $('copyBtn').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(admin.link);
+    } catch (e) {
+      $('linkBox').select();
+      document.execCommand('copy');
+    }
+    $('copyMsg').textContent = 'Lien copié ✓';
+    setTimeout(() => $('copyMsg').textContent = '', 2500);
+  });
+
+  if (navigator.share) {
+    show('shareBtn', true);
+    $('shareBtn').addEventListener('click', () => {
+      navigator.share({ title: 'Secret Santa 🎅', text: 'Choisis ton nom et découvre à qui tu offres un cadeau !', url: admin.link }).catch(() => {});
+    });
+  }
+
+  $('restartBtn').addEventListener('click', () => {
+    if (!confirm("Refaire un tirage ? L'ancien lien ne doit plus être utilisé : il faudra renvoyer le nouveau à tout le monde.")) return;
+    admin.link = null;
+    saveAdmin();
+    renderAdmin();
+  });
+
+  function renderAdmin() {
+    show('admin', !admin.link);
+    show('share', !!admin.link);
+    if (admin.link) {
+      $('linkBox').value = admin.link;
+      return;
+    }
+    $('nameList').innerHTML = '';
+    admin.names.forEach((n, i) => {
+      const li = document.createElement('li');
+      li.textContent = n;
+      const b = document.createElement('button');
+      b.textContent = '✕';
+      b.title = 'Retirer';
+      b.onclick = () => { admin.names.splice(i, 1); saveAdmin(); renderAdmin(); };
+      li.appendChild(b);
+      $('nameList').appendChild(li);
+    });
+    $('count').textContent = admin.names.length ? admin.names.length + ' participant(s)' : '';
+    $('startBtn').disabled = admin.names.length < 3;
+    $('startBtn').textContent = admin.names.length < 3 ? 'Ajoute au moins 3 noms' : 'Lancer le Secret Santa 🎁';
+  }
+
+  // ======================================================
+  //  MODE JOUEUR (le lien contient le tirage)
+  // ======================================================
+  function runPlayer(data) {
+    const MINE_KEY = 'secret-santa-mine-' + data.id;
+    const mine = store.get(MINE_KEY);
+
+    $('backBtn').addEventListener('click', () => {
+      if (!confirm("Tu t'es trompé de nom ? Ne regarde pas le résultat des autres 😉")) return;
+      store.del(MINE_KEY);
+      location.reload();
+    });
+
+    // Ce téléphone a déjà tiré : on réaffiche directement son résultat
+    if (mine !== null && data.n[mine] !== undefined) {
+      reveal(mine, false);
+      return;
+    }
+
+    const sel = $('whoSelect');
+    sel.innerHTML = '<option value="">— Choisis ton nom —</option>';
+    data.n
+      .map((name, i) => ({ name, i }))
+      .sort((x, y) => x.name.localeCompare(y.name, 'fr'))
+      .forEach(({ name, i }) => {
+        const o = document.createElement('option');
+        o.value = i; o.textContent = name;
+        sel.appendChild(o);
+      });
+    sel.addEventListener('change', () => $('drawBtn').disabled = sel.value === '');
+    show('pick', true);
+
+    $('drawBtn').addEventListener('click', () => {
+      const i = Number(sel.value);
+      if (sel.value === '') return;
+      if (!confirm('Tu es bien ' + data.n[i] + ' ?')) return;
+      store.set(MINE_KEY, i);
+      reveal(i, true);
+    });
+
+    function reveal(i, animate) {
+      show('pick', false);
+      show('result', true);
+      $('resultIntro').textContent = data.n[i] + ', tu offres un cadeau à…';
+      const done = () => {
+        $('resultName').textContent = data.n[data.a[i]];
+        show('resultName', true);
+        show('secretNote', true);
+        show('backBtn', true);
+      };
+      if (animate) {
+        $('gift').classList.add('shake');
+        setTimeout(done, 1200);
+      } else {
+        done();
+      }
+    }
+  }
+
+  // ---------- Démarrage ----------
+  const m = location.hash.match(/^#t=(.+)$/);
+  if (m) {
+    let data = null;
+    try { data = decode(m[1]); } catch (e) {}
+    if (data && Array.isArray(data.n) && Array.isArray(data.a) && data.n.length === data.a.length) {
+      runPlayer(data);
+    } else {
+      show('invalid', true);
+    }
+  } else {
+    renderAdmin();
+  }
+</script>
+</body>
+</html>
