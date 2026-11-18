@@ -50,7 +50,7 @@
     background: #fff;
     min-width: 0;
   }
-  textarea { font-size: .8rem; resize: none; height: 70px; color: var(--muted); }
+  textarea { font-size: .8rem; resize: none; height: 64px; color: var(--muted); }
   button {
     font: inherit;
     font-weight: 600;
@@ -67,13 +67,17 @@
   button.red:hover:not(:disabled) { background: var(--red-dark); }
   button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
   button.big { width: 100%; padding: 14px; font-size: 1.1rem; margin-top: 12px; }
+  button.small { padding: 4px 10px; font-size: .8rem; background: transparent; color: var(--red); border: 1px solid var(--line); }
   ul.names { list-style: none; padding: 0; margin: 16px 0 0; }
   ul.names li {
-    display: flex; justify-content: space-between; align-items: center;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
     padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px;
     margin-bottom: 6px; background: #fff;
   }
-  ul.names li button { padding: 4px 10px; background: transparent; color: var(--red); }
+  ul.names li .right { display: flex; gap: 6px; align-items: center; }
+  .tag { font-size: .8rem; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+  .tag.done { background: #dff1e6; color: var(--green); }
+  .tag.wait { background: #f3ece0; color: var(--muted); }
   .count { color: var(--muted); font-size: .9rem; margin-top: 8px; }
   .reveal { text-align: center; padding: 16px 0 8px; }
   .gift { font-size: 4rem; display: inline-block; }
@@ -91,6 +95,7 @@
   .error { color: var(--red); font-size: .9rem; min-height: 1.2em; margin: 8px 0 0; }
   .ok { color: var(--green); font-size: .9rem; min-height: 1.2em; margin: 8px 0 0; }
   .hidden { display: none !important; }
+  code { background: #f3ece0; padding: 1px 5px; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -98,30 +103,62 @@
   <h1>🎅 Secret Santa</h1>
   <p class="subtitle">Tirage au sort des cadeaux</p>
 
-  <!-- ===== ADMIN : saisie des noms ===== -->
-  <section id="admin" class="card hidden">
+  <!-- Chargement -->
+  <section id="loading" class="card"><p class="muted">Chargement…</p></section>
+
+  <!-- Firebase pas configuré -->
+  <section id="noconfig" class="card hidden">
+    <h2>Configuration manquante</h2>
+    <p>Colle la configuration Firebase dans <code>index.html</code> (variable <code>firebaseConfig</code>, en haut du script).</p>
+  </section>
+
+  <!-- ===== ACCUEIL ADMIN : Secret Santa déjà en cours ===== -->
+  <section id="resume" class="card hidden">
+    <h2>Secret Santa en cours</h2>
+    <p>Tu as déjà créé un Secret Santa sur cet appareil.</p>
+    <button id="resumeBtn" class="big">Ouvrir le tableau de bord admin</button>
+    <button id="newGameBtn" class="big ghost">Créer un nouveau Secret Santa</button>
+  </section>
+
+  <!-- ===== CRÉATION ===== -->
+  <section id="create" class="card hidden">
     <h2>Admin — Liste des participants</h2>
-    <p class="muted">Ajoute tous les noms, puis lance le tirage. Tu obtiendras un lien à envoyer à tout le monde.</p>
-    <form id="addForm" class="row">
-      <input id="nameInput" placeholder="Prénom" autocomplete="off">
+    <p class="muted">Ajoute tous les noms, puis lance le Secret Santa. Tu pourras encore en ajouter après.</p>
+    <form id="createForm" class="row">
+      <input id="createInput" placeholder="Prénom" autocomplete="off">
       <button type="submit">Ajouter</button>
     </form>
-    <p id="adminError" class="error"></p>
-    <ul id="nameList" class="names"></ul>
-    <div id="count" class="count"></div>
+    <p id="createError" class="error"></p>
+    <ul id="createList" class="names"></ul>
+    <div id="createCount" class="count"></div>
     <button id="startBtn" class="big red" disabled>Lancer le Secret Santa 🎁</button>
   </section>
 
-  <!-- ===== ADMIN : lien à partager ===== -->
-  <section id="share" class="card hidden">
-    <h2>🎉 Tirage prêt !</h2>
-    <p>Envoie ce lien à tous les participants (groupe WhatsApp, SMS…). Chacun choisira son nom et découvrira à qui il offre un cadeau.</p>
-    <p class="muted">Toi non plus tu ne connais pas le résultat : ouvre le lien comme tout le monde pour tirer ton nom.</p>
-    <textarea id="linkBox" readonly></textarea>
-    <button id="copyBtn" class="big">Copier le lien 📋</button>
-    <button id="shareBtn" class="big red hidden">Partager…</button>
+  <!-- ===== TABLEAU DE BORD ADMIN ===== -->
+  <section id="adminShare" class="card hidden">
+    <h2>Lien pour les participants</h2>
+    <p class="muted">Envoie ce lien à tout le monde (toi aussi, tu tires avec ce lien).</p>
+    <textarea id="playerLink" readonly></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="copyBtn">Copier le lien 📋</button>
+      <button id="shareBtn" class="red hidden">Partager…</button>
+    </div>
     <p id="copyMsg" class="ok"></p>
-    <button id="restartBtn" class="big ghost">Refaire un nouveau tirage</button>
+  </section>
+
+  <section id="adminPanel" class="card hidden">
+    <h2>Participants</h2>
+    <form id="addForm" class="row">
+      <input id="addInput" placeholder="Ajouter un prénom" autocomplete="off">
+      <button type="submit">Ajouter</button>
+    </form>
+    <p id="addError" class="error"></p>
+    <ul id="adminList" class="names"></ul>
+    <div id="adminCount" class="count"></div>
+    <p class="muted" style="margin-top:12px">
+      ✕ retire une personne qui n'est pas encore impliquée dans un tirage.<br>
+      « Annuler » efface le tirage d'une personne (par exemple si elle a choisi le mauvais nom) : elle pourra retirer.
+    </p>
   </section>
 
   <!-- ===== JOUEUR : choix du nom ===== -->
@@ -130,6 +167,7 @@
     <p class="muted">Choisis <strong>ton</strong> nom dans la liste, puis tire au sort la personne à qui tu offres un cadeau.</p>
     <select id="whoSelect"></select>
     <button id="drawBtn" class="big red" disabled>Tirer au sort 🎲</button>
+    <p id="drawError" class="error"></p>
   </section>
 
   <!-- ===== JOUEUR : résultat ===== -->
@@ -140,17 +178,47 @@
       <div id="resultName" class="result-name hidden"></div>
       <p id="secretNote" class="muted hidden">Garde le secret 🤫</p>
     </div>
-    <button id="backBtn" class="big ghost hidden">Ce n'est pas moi, revenir</button>
+  </section>
+
+  <!-- ===== Tout le monde a tiré ===== -->
+  <section id="finished" class="card hidden">
+    <h2>🎄 Tout le monde a tiré !</h2>
+    <p>Le tirage est terminé. Joyeux Noël à tous !</p>
+  </section>
+
+  <!-- ===== SUIVI (joueurs) ===== -->
+  <section id="progress" class="card hidden">
+    <h2>Qui a déjà tiré ?</h2>
+    <ul id="statusList" class="names"></ul>
+    <div id="progressText" class="count"></div>
   </section>
 
   <!-- ===== Lien invalide ===== -->
   <section id="invalid" class="card hidden">
     <h2>Lien invalide 😕</h2>
-    <p>Ce lien de Secret Santa est incomplet ou abîmé. Demande à l'organisateur de te le renvoyer.</p>
+    <p>Ce Secret Santa n'existe pas ou le lien est abîmé. Demande à l'organisateur de te le renvoyer.</p>
   </section>
 </div>
 
-<script>
+<script type="module">
+  // =====================================================================
+  //  CONFIGURATION FIREBASE — colle ici la config de ton projet Firebase
+  //  (Console Firebase → Paramètres du projet → Vos applications → Web)
+  // =====================================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyDfKZIveM9etPcI3JJ3CXWhDw6c9QvxVaw",
+    authDomain: "secretsanta-355a0.firebaseapp.com",
+    databaseURL: "https://secretsanta-355a0-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "secretsanta-355a0",
+    storageBucket: "secretsanta-355a0.firebasestorage.app",
+    messagingSenderId: "425997232205",
+    appId: "1:425997232205:web:a05bf8af89d9af9e051404"
+  };
+  // =====================================================================
+
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, onValue, set, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
   const $ = id => document.getElementById(id);
   const show = (id, on) => $(id).classList.toggle('hidden', !on);
   const store = {
@@ -158,194 +226,351 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
     del(k) { try { localStorage.removeItem(k); } catch (e) {} },
   };
+  const randId = (len = 10) => {
+    const chars = 'abcdefghijkmnpqrstuvwxyz23456789';
+    const buf = crypto.getRandomValues(new Uint8Array(len));
+    return Array.from(buf, b => chars[b % chars.length]).join('');
+  };
+  const byName = names => (a, b) => names[a].localeCompare(names[b], 'fr');
 
-  // ---------- Encodage du tirage dans le lien ----------
-  // Le tirage est brouillé (XOR + base64) pour qu'on ne puisse pas lire
-  // les résultats directement dans l'URL.
-  const SECRET = 'ho-ho-ho-joyeux-noel';
+  show('loading', false);
+  if (!firebaseConfig.databaseURL) {
+    show('noconfig', true);
+    throw new Error('firebaseConfig manquant');
+  }
+  const db = getDatabase(initializeApp(firebaseConfig));
 
-  function xor(bytes) {
-    const k = new TextEncoder().encode(SECRET);
-    return bytes.map((b, i) => b ^ k[i % k.length]);
-  }
-  function encode(obj) {
-    const bytes = xor(new TextEncoder().encode(JSON.stringify(obj)));
-    let bin = '';
-    bytes.forEach(b => bin += String.fromCharCode(b));
-    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-  function decode(str) {
-    const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-    const bin = atob(b64);
-    const bytes = xor(Uint8Array.from(bin, c => c.charCodeAt(0)));
-    return JSON.parse(new TextDecoder().decode(bytes));
+  // ---------- Logique du tirage ----------
+  // game = { names: {id: prénom}, draws: {idQuiOffre: idQuiReçoit}, admin: token }
+  const ids = g => Object.keys(g.names || {});
+  const draws = g => g.draws || {};
+  const givers = g => ids(g).filter(i => !(i in draws(g)));                       // n'ont pas encore tiré
+  const pool = g => { const t = new Set(Object.values(draws(g))); return ids(g).filter(i => !t.has(i)); }; // pas encore tirés
+
+  // Le tirage reste possible tant qu'on n'a pas une seule personne restante
+  // qui ne pourrait tirer qu'elle-même.
+  function feasible(g) {
+    const G = givers(g), R = pool(g);
+    return !(G.length === 1 && R.length === 1 && G[0] === R[0]);
   }
 
-  // ---------- Tirage : personne ne se tire soi-même ----------
-  function makeDraw(n) {
-    // Mélange aléatoire jusqu'à obtenir un tirage où personne ne se tire soi-même
-    while (true) {
-      const p = [...Array(n).keys()];
-      for (let i = n - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [p[i], p[j]] = [p[j], p[i]];
+  function candidatesFor(g, me) {
+    const R = pool(g).filter(i => i !== me);
+    const others = givers(g).filter(i => i !== me);
+    // Si une seule autre personne doit encore tirer et qu'elle est encore dans le chapeau,
+    // il faut la tirer maintenant, sinon elle ne pourrait tirer qu'elle-même.
+    if (others.length === 1 && R.includes(others[0])) return [others[0]];
+    return R;
+  }
+
+  // ---------- Routage ----------
+  const params = new URLSearchParams(location.hash.slice(1));
+  const gameId = params.get('g');
+  const adminToken = params.get('admin');
+  const ADMIN_KEY = 'secret-santa-admin-link';
+
+  if (!gameId) {
+    homeAdmin();
+  } else {
+    const gameRef = ref(db, 'games/' + gameId);
+    let first = true;
+    onValue(gameRef, snap => {
+      const g = snap.val();
+      if (!g || !g.names) { show('invalid', true); return; }
+      if (adminToken) {
+        if (adminToken !== g.admin) { show('invalid', true); return; }
+        if (first) setupAdmin(gameRef);
+        renderAdmin(g);
+      } else {
+        if (first) setupPlayer(gameRef);
+        renderPlayer(g);
       }
-      if (p.every((v, i) => v !== i)) return p;
+      first = false;
+    }, () => show('invalid', true));
+  }
+
+  const baseUrl = location.origin + location.pathname;
+
+  // =====================================================================
+  //  ACCUEIL / CRÉATION (admin)
+  // =====================================================================
+  function homeAdmin() {
+    const saved = store.get(ADMIN_KEY);
+    if (saved) {
+      show('resume', true);
+      $('resumeBtn').onclick = () => { location.href = saved; location.reload(); };
+      $('newGameBtn').onclick = () => {
+        if (!confirm("Créer un nouveau Secret Santa ? L'ancien restera accessible avec son lien, mais ce bouton n'y mènera plus.")) return;
+        store.del(ADMIN_KEY);
+        show('resume', false);
+        showCreate();
+      };
+    } else {
+      showCreate();
     }
   }
 
-  // ======================================================
-  //  MODE ADMIN (pas de tirage dans le lien)
-  // ======================================================
-  const ADMIN_KEY = 'secret-santa-admin';
-  let admin = store.get(ADMIN_KEY) || { names: [], link: null };
-
-  function saveAdmin() { store.set(ADMIN_KEY, admin); }
-
-  $('addForm').addEventListener('submit', e => {
-    e.preventDefault();
-    const name = $('nameInput').value.trim();
-    $('adminError').textContent = '';
-    if (!name) return;
-    if (admin.names.some(n => n.toLowerCase() === name.toLowerCase())) {
-      $('adminError').textContent = 'Ce nom est déjà dans la liste.';
-      return;
-    }
-    admin.names.push(name);
-    $('nameInput').value = '';
-    saveAdmin();
-    renderAdmin();
-    $('nameInput').focus();
-  });
-
-  $('startBtn').addEventListener('click', () => {
-    if (admin.names.length < 3) return;
-    if (!confirm('Lancer le tirage avec ' + admin.names.length + ' participants ?')) return;
-    const data = { v: 1, id: Date.now().toString(36), n: admin.names, a: makeDraw(admin.names.length) };
-    admin.link = location.origin + location.pathname + '#t=' + encode(data);
-    saveAdmin();
-    renderAdmin();
-  });
-
-  $('copyBtn').addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText(admin.link);
-    } catch (e) {
-      $('linkBox').select();
-      document.execCommand('copy');
-    }
-    $('copyMsg').textContent = 'Lien copié ✓';
-    setTimeout(() => $('copyMsg').textContent = '', 2500);
-  });
-
-  if (navigator.share) {
-    show('shareBtn', true);
-    $('shareBtn').addEventListener('click', () => {
-      navigator.share({ title: 'Secret Santa 🎅', text: 'Choisis ton nom et découvre à qui tu offres un cadeau !', url: admin.link }).catch(() => {});
-    });
-  }
-
-  $('restartBtn').addEventListener('click', () => {
-    if (!confirm("Refaire un tirage ? L'ancien lien ne doit plus être utilisé : il faudra renvoyer le nouveau à tout le monde.")) return;
-    admin.link = null;
-    saveAdmin();
-    renderAdmin();
-  });
-
-  function renderAdmin() {
-    show('admin', !admin.link);
-    show('share', !!admin.link);
-    if (admin.link) {
-      $('linkBox').value = admin.link;
-      return;
-    }
-    $('nameList').innerHTML = '';
-    admin.names.forEach((n, i) => {
-      const li = document.createElement('li');
-      li.textContent = n;
-      const b = document.createElement('button');
-      b.textContent = '✕';
-      b.title = 'Retirer';
-      b.onclick = () => { admin.names.splice(i, 1); saveAdmin(); renderAdmin(); };
-      li.appendChild(b);
-      $('nameList').appendChild(li);
-    });
-    $('count').textContent = admin.names.length ? admin.names.length + ' participant(s)' : '';
-    $('startBtn').disabled = admin.names.length < 3;
-    $('startBtn').textContent = admin.names.length < 3 ? 'Ajoute au moins 3 noms' : 'Lancer le Secret Santa 🎁';
-  }
-
-  // ======================================================
-  //  MODE JOUEUR (le lien contient le tirage)
-  // ======================================================
-  function runPlayer(data) {
-    const MINE_KEY = 'secret-santa-mine-' + data.id;
-    const mine = store.get(MINE_KEY);
-
-    $('backBtn').addEventListener('click', () => {
-      if (!confirm("Tu t'es trompé de nom ? Ne regarde pas le résultat des autres 😉")) return;
-      store.del(MINE_KEY);
+  function showCreate() {
+    show('create', true);
+    const names = [];
+    const render = () => {
+      $('createList').innerHTML = '';
+      names.forEach((n, i) => {
+        const li = document.createElement('li');
+        li.textContent = n;
+        const b = document.createElement('button');
+        b.className = 'small'; b.textContent = '✕';
+        b.onclick = () => { names.splice(i, 1); render(); };
+        li.appendChild(b);
+        $('createList').appendChild(li);
+      });
+      $('createCount').textContent = names.length ? names.length + ' participant(s)' : '';
+      $('startBtn').disabled = names.length < 3;
+      $('startBtn').textContent = names.length < 3 ? 'Ajoute au moins 3 noms' : 'Lancer le Secret Santa 🎁';
+    };
+    $('createForm').onsubmit = e => {
+      e.preventDefault();
+      const n = $('createInput').value.trim();
+      $('createError').textContent = '';
+      if (!n) return;
+      if (names.some(x => x.toLowerCase() === n.toLowerCase())) {
+        $('createError').textContent = 'Ce nom est déjà dans la liste.';
+        return;
+      }
+      names.push(n);
+      $('createInput').value = '';
+      render();
+      $('createInput').focus();
+    };
+    $('startBtn').onclick = async () => {
+      if (names.length < 3) return;
+      if (!confirm('Lancer le Secret Santa avec ' + names.length + ' participants ?')) return;
+      $('startBtn').disabled = true;
+      const id = randId(10), token = randId(12);
+      const obj = {};
+      names.forEach(n => obj[randId(8)] = n);
+      try {
+        await set(ref(db, 'games/' + id), { names: obj, admin: token, created: Date.now() });
+      } catch (e) {
+        $('createError').textContent = "Erreur d'enregistrement : vérifie la config et les règles Firebase.";
+        $('startBtn').disabled = false;
+        return;
+      }
+      const adminLink = baseUrl + '#g=' + id + '&admin=' + token;
+      store.set(ADMIN_KEY, adminLink);
+      location.href = adminLink;
       location.reload();
-    });
+    };
+    render();
+  }
 
-    // Ce téléphone a déjà tiré : on réaffiche directement son résultat
-    if (mine !== null && data.n[mine] !== undefined) {
-      reveal(mine, false);
-      return;
+  // =====================================================================
+  //  TABLEAU DE BORD ADMIN
+  // =====================================================================
+  function setupAdmin(gameRef) {
+    store.set(ADMIN_KEY, location.href);
+    const playerLink = baseUrl + '#g=' + gameId;
+    $('playerLink').value = playerLink;
+    show('adminShare', true);
+    show('adminPanel', true);
+
+    $('copyBtn').onclick = async () => {
+      try { await navigator.clipboard.writeText(playerLink); }
+      catch (e) { $('playerLink').select(); document.execCommand('copy'); }
+      $('copyMsg').textContent = 'Lien copié ✓';
+      setTimeout(() => $('copyMsg').textContent = '', 2500);
+    };
+    if (navigator.share) {
+      show('shareBtn', true);
+      $('shareBtn').onclick = () => navigator.share({
+        title: 'Secret Santa 🎅',
+        text: 'Choisis ton nom et découvre à qui tu offres un cadeau !',
+        url: playerLink
+      }).catch(() => {});
     }
 
-    const sel = $('whoSelect');
-    sel.innerHTML = '<option value="">— Choisis ton nom —</option>';
-    data.n
-      .map((name, i) => ({ name, i }))
-      .sort((x, y) => x.name.localeCompare(y.name, 'fr'))
-      .forEach(({ name, i }) => {
+    $('addForm').onsubmit = async e => {
+      e.preventDefault();
+      const n = $('addInput').value.trim();
+      $('addError').textContent = '';
+      if (!n) return;
+      let msg = '';
+      await runTransaction(gameRef, g => {
+        if (!g) return g;
+        msg = '';
+        if (Object.values(g.names).some(x => x.toLowerCase() === n.toLowerCase())) { msg = 'Ce nom est déjà dans la liste.'; return; }
+        if (givers(g).length === 0) { msg = "Tout le monde a déjà tiré : la nouvelle personne ne pourrait tirer qu'elle-même. Annule d'abord le tirage de quelqu'un."; return; }
+        g.names[randId(8)] = n;
+        return g;
+      });
+      if (msg) $('addError').textContent = msg;
+      else { $('addInput').value = ''; $('addInput').focus(); }
+    };
+  }
+
+  async function removeName(gameRef, id) {
+    let msg = '';
+    await runTransaction(gameRef, g => {
+      if (!g) return g;
+      msg = '';
+      const d = draws(g);
+      if (id in d || Object.values(d).includes(id)) { msg = 'Cette personne est déjà impliquée dans un tirage.'; return; }
+      delete g.names[id];
+      if (ids(g).length < 2) { msg = 'Il faut au moins 2 participants.'; return; }
+      if (!feasible(g)) { msg = "Impossible : la dernière personne restante ne pourrait tirer qu'elle-même."; return; }
+      return g;
+    });
+    $('addError').textContent = msg;
+  }
+
+  async function cancelDraw(gameRef, id) {
+    await runTransaction(gameRef, g => {
+      if (!g) return g;
+      if (g.draws) delete g.draws[id];
+      return g;
+    });
+  }
+
+  function renderAdmin(g) {
+    const gameRef = ref(db, 'games/' + gameId);
+    const d = draws(g);
+    const taken = new Set(Object.values(d));
+    $('adminList').innerHTML = '';
+    ids(g).sort(byName(g.names)).forEach(id => {
+      const done = id in d;
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.textContent = g.names[id];
+      const right = document.createElement('span');
+      right.className = 'right';
+      const tag = document.createElement('span');
+      tag.className = 'tag ' + (done ? 'done' : 'wait');
+      tag.textContent = done ? 'a tiré ✓' : 'en attente';
+      right.appendChild(tag);
+      if (done) {
+        const b = document.createElement('button');
+        b.className = 'small'; b.textContent = 'Annuler';
+        b.onclick = () => {
+          if (confirm('Annuler le tirage de ' + g.names[id] + ' ? Le nom tiré retourne dans le chapeau et ' + g.names[id] + ' devra retirer.')) cancelDraw(gameRef, id);
+        };
+        right.appendChild(b);
+      } else if (!taken.has(id)) {
+        const b = document.createElement('button');
+        b.className = 'small'; b.textContent = '✕'; b.title = 'Retirer';
+        b.onclick = () => { if (confirm('Retirer ' + g.names[id] + ' ?')) removeName(gameRef, id); };
+        right.appendChild(b);
+      }
+      li.append(name, right);
+      $('adminList').appendChild(li);
+    });
+    const total = ids(g).length, nDone = Object.keys(d).length;
+    $('adminCount').textContent = nDone + ' / ' + total + ' ont tiré';
+  }
+
+  // =====================================================================
+  //  JOUEUR
+  // =====================================================================
+  const MINE_KEY = 'secret-santa-mine-' + gameId;
+  let revealing = false;
+
+  function setupPlayer(gameRef) {
+    $('whoSelect').addEventListener('change', () => $('drawBtn').disabled = !$('whoSelect').value);
+
+    $('drawBtn').onclick = async () => {
+      const me = $('whoSelect').value;
+      if (!me) return;
+      const label = $('whoSelect').selectedOptions[0].textContent;
+      if (!confirm('Tu es bien ' + label + ' ?')) return;
+      $('drawBtn').disabled = true;
+      $('drawError').textContent = '';
+      let msg = '';
+      try {
+        const res = await runTransaction(gameRef, g => {
+          if (!g) return g;
+          msg = '';
+          if (!g.names || !g.names[me]) { msg = "Ce nom n'existe plus."; return; }
+          if (draws(g)[me]) { msg = 'Ce nom a déjà tiré.'; return; }
+          const c = candidatesFor(g, me);
+          if (!c.length) { msg = "Plus personne à tirer. Préviens l'organisateur."; return; }
+          g.draws = g.draws || {};
+          g.draws[me] = c[Math.floor(Math.random() * c.length)];
+          return g;
+        });
+        if (!res.committed || msg) {
+          $('drawError').textContent = msg || 'Le tirage a échoué, réessaie.';
+          $('drawBtn').disabled = false;
+          return;
+        }
+        store.set(MINE_KEY, me);
+        const g = res.snapshot.val();
+        reveal(g, me, true);
+      } catch (e) {
+        $('drawError').textContent = 'Erreur de connexion, réessaie.';
+        $('drawBtn').disabled = false;
+      }
+    };
+  }
+
+  function reveal(g, me, animate) {
+    revealing = true;
+    show('pick', false);
+    show('result', true);
+    $('resultIntro').textContent = g.names[me] + ', tu offres un cadeau à…';
+    const done = () => {
+      $('resultName').textContent = g.names[draws(g)[me]];
+      show('resultName', true);
+      show('secretNote', true);
+      revealing = false;
+    };
+    if (animate) {
+      show('resultName', false);
+      $('gift').classList.add('shake');
+      setTimeout(done, 1200);
+    } else {
+      done();
+    }
+  }
+
+  function renderPlayer(g) {
+    const d = draws(g);
+    const mine = store.get(MINE_KEY);
+    const remaining = givers(g);
+
+    // Résultat de ce téléphone
+    if (mine && d[mine] && g.names[mine] && g.names[d[mine]]) {
+      if (!revealing) reveal(g, mine, false);
+    } else {
+      if (mine) store.del(MINE_KEY); // tirage annulé par l'admin
+      show('result', false);
+      show('pick', remaining.length > 0);
+      const sel = $('whoSelect');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">— Choisis ton nom —</option>';
+      remaining.sort(byName(g.names)).forEach(id => {
         const o = document.createElement('option');
-        o.value = i; o.textContent = name;
+        o.value = id; o.textContent = g.names[id];
         sel.appendChild(o);
       });
-    sel.addEventListener('change', () => $('drawBtn').disabled = sel.value === '');
-    show('pick', true);
+      if (remaining.includes(current)) sel.value = current;
+      $('drawBtn').disabled = !sel.value;
+    }
 
-    $('drawBtn').addEventListener('click', () => {
-      const i = Number(sel.value);
-      if (sel.value === '') return;
-      if (!confirm('Tu es bien ' + data.n[i] + ' ?')) return;
-      store.set(MINE_KEY, i);
-      reveal(i, true);
+    show('finished', remaining.length === 0);
+
+    // Suivi
+    show('progress', true);
+    $('statusList').innerHTML = '';
+    ids(g).sort(byName(g.names)).forEach(id => {
+      const done = id in d;
+      const li = document.createElement('li');
+      li.textContent = g.names[id];
+      const t = document.createElement('span');
+      t.className = 'tag ' + (done ? 'done' : 'wait');
+      t.textContent = done ? 'a tiré ✓' : 'en attente';
+      li.appendChild(t);
+      $('statusList').appendChild(li);
     });
-
-    function reveal(i, animate) {
-      show('pick', false);
-      show('result', true);
-      $('resultIntro').textContent = data.n[i] + ', tu offres un cadeau à…';
-      const done = () => {
-        $('resultName').textContent = data.n[data.a[i]];
-        show('resultName', true);
-        show('secretNote', true);
-        show('backBtn', true);
-      };
-      if (animate) {
-        $('gift').classList.add('shake');
-        setTimeout(done, 1200);
-      } else {
-        done();
-      }
-    }
-  }
-
-  // ---------- Démarrage ----------
-  const m = location.hash.match(/^#t=(.+)$/);
-  if (m) {
-    let data = null;
-    try { data = decode(m[1]); } catch (e) {}
-    if (data && Array.isArray(data.n) && Array.isArray(data.a) && data.n.length === data.a.length) {
-      runPlayer(data);
-    } else {
-      show('invalid', true);
-    }
-  } else {
-    renderAdmin();
+    $('progressText').textContent = (ids(g).length - remaining.length) + ' / ' + ids(g).length + ' ont tiré';
   }
 </script>
 </body>
