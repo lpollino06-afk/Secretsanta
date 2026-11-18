@@ -159,6 +159,8 @@
       ✕ retire une personne qui n'est pas encore impliquée dans un tirage.<br>
       « Annuler » efface le tirage d'une personne (par exemple si elle a choisi le mauvais nom) : elle pourra retirer.
     </p>
+    <button id="resetBtn" class="big ghost">🔄 Réinitialiser tous les tirages</button>
+    <p class="muted">Les noms sont conservés, et le lien envoyé aux participants reste le même : tout le monde pourra retirer.</p>
   </section>
 
   <!-- ===== JOUEUR : choix du nom ===== -->
@@ -388,6 +390,19 @@
         url: playerLink
       }).catch(() => {});
     }
+
+    $('resetBtn').onclick = async () => {
+      if (!confirm('Réinitialiser TOUS les tirages ? Tout le monde devra retirer au sort.')) return;
+      if (!confirm('Sûr ? Cette action est définitive.')) return;
+      try {
+        await set(ref(db, 'games/' + gameId + '/draws'), null);
+        $('addError').textContent = '';
+        $('copyMsg').textContent = 'Tirages réinitialisés ✓';
+        setTimeout(() => $('copyMsg').textContent = '', 3000);
+      } catch (e) {
+        $('addError').textContent = 'Erreur pendant la réinitialisation, réessaie.';
+      }
+    };
 
     $('addForm').onsubmit = async e => {
       e.preventDefault();
