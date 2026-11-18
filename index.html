@@ -161,6 +161,8 @@
     </p>
     <button id="resetBtn" class="big ghost">🔄 Réinitialiser tous les tirages</button>
     <p class="muted">Les noms sont conservés, et le lien envoyé aux participants reste le même : tout le monde pourra retirer.</p>
+    <button id="resetAllBtn" class="big red">🗑️ Tout réinitialiser</button>
+    <p class="muted">Supprime tout (noms et tirages) et revient à la création. Le lien envoyé aux participants ne marchera plus.</p>
   </section>
 
   <!-- ===== JOUEUR : choix du nom ===== -->
@@ -270,6 +272,7 @@
   const gameId = params.get('g');
   const adminToken = params.get('admin');
   const ADMIN_KEY = 'secret-santa-admin-link';
+  const baseUrl = location.origin + location.pathname;
 
   if (!gameId) {
     homeAdmin();
@@ -291,7 +294,6 @@
     }, () => show('invalid', true));
   }
 
-  const baseUrl = location.origin + location.pathname;
 
   // =====================================================================
   //  ACCUEIL / CRÉATION (admin)
@@ -402,6 +404,20 @@
       } catch (e) {
         $('addError').textContent = 'Erreur pendant la réinitialisation, réessaie.';
       }
+    };
+
+    $('resetAllBtn').onclick = async () => {
+      if (!confirm('Tout supprimer (noms ET tirages) et recommencer de zéro ?')) return;
+      if (!confirm("Sûr ? L'ancien lien ne marchera plus : il faudra envoyer le nouveau à tout le monde.")) return;
+      try {
+        await set(ref(db, 'games/' + gameId), null);
+      } catch (e) {
+        $('addError').textContent = 'Erreur pendant la suppression, réessaie.';
+        return;
+      }
+      store.del(ADMIN_KEY);
+      location.href = baseUrl;
+      location.reload();
     };
 
     $('addForm').onsubmit = async e => {
