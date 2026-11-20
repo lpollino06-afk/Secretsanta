@@ -94,6 +94,9 @@
   @keyframes pop { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
   .error { color: var(--red); font-size: .9rem; min-height: 1.2em; margin: 8px 0 0; }
   .ok { color: var(--green); font-size: .9rem; min-height: 1.2em; margin: 8px 0 0; }
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  label.check { display: flex; align-items: center; gap: 8px; font-size: .95rem; }
+  label.check input { width: auto; flex: none; }
   .hidden { display: none !important; }
   code { background: #f3ece0; padding: 1px 5px; border-radius: 4px; }
 </style>
@@ -131,6 +134,20 @@
     <p id="createError" class="error"></p>
     <ul id="createList" class="names"></ul>
     <div id="createCount" class="count"></div>
+
+    <div id="exclBox" class="hidden" style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px">
+      <h2>Exclusions <span class="muted">(optionnel)</span></h2>
+      <p class="muted">Empêche une personne de tomber sur certains prénoms (couples, frères et sœurs…).</p>
+      <div class="stack">
+        <select id="exclA"></select>
+        <div class="muted" style="text-align:center">ne peut pas tirer</div>
+        <select id="exclB"></select>
+        <label class="check"><input type="checkbox" id="exclBoth" checked> Dans les deux sens</label>
+        <button id="exclAdd" type="button">Ajouter l'exclusion</button>
+      </div>
+      <p id="exclError" class="error"></p>
+      <ul id="exclList" class="names"></ul>
+    </div>
     <button id="startBtn" class="big red" disabled>Lancer le Secret Santa 🎁</button>
   </section>
 
@@ -155,6 +172,10 @@
     <p id="addError" class="error"></p>
     <ul id="adminList" class="names"></ul>
     <div id="adminCount" class="count"></div>
+    <div id="adminExclBox" class="hidden">
+      <h2 style="margin-top:20px">Exclusions</h2>
+      <ul id="adminExcl" class="names"></ul>
+    </div>
     <p class="muted" style="margin-top:12px">
       ✕ retire une personne qui n'est pas encore impliquée dans un tirage.<br>
       « Annuler » efface le tirage d'une personne (par exemple si elle a choisi le mauvais nom) : elle pourra retirer.
@@ -253,18 +274,34 @@
 
   // Le tirage reste possible tant qu'on n'a pas une seule personne restante
   // qui ne pourrait tirer qu'elle-même.
-  function feasible(g) {
-    const G = givers(g), R = pool(g);
-    return !(G.length === 1 && R.length === 1 && G[0] === R[0]);
+  // (et en tenant compte des exclusions : g.excl = {idQuiOffre: {idInterdit: true}})
+  const allowed = (excl, a, b) => a !== b && !(excl && excl[a] && excl[a][b]);
+
+  // Vérifie qu'on peut encore associer chaque personne G à quelqu'un de R
+  // en respectant les règles (algorithme de couplage, instantané pour 15-30 personnes).
+  function hasMatching(excl, G, R) {
+    if (G.length !== R.length) return false;
+    const match = {}; // receveur -> donneur
+    const tryG = (gv, seen) => {
+      for (const r of R) {
+        if (!allowed(excl, gv, r) || seen.has(r)) continue;
+        seen.add(r);
+        if (!(r in match) || tryG(match[r], seen)) { match[r] = gv; return true; }
+      }
+      return false;
+    };
+    return G.every(gv => tryG(gv, new Set()));
   }
 
+  function feasible(g) {
+    return hasMatching(g.excl, givers(g), pool(g));
+  }
+
+  // Ne propose que les noms qui laissent un tirage possible pour tous les suivants.
   function candidatesFor(g, me) {
-    const R = pool(g).filter(i => i !== me);
+    const R = pool(g);
     const others = givers(g).filter(i => i !== me);
-    // Si une seule autre personne doit encore tirer et qu'elle est encore dans le chapeau,
-    // il faut la tirer maintenant, sinon elle ne pourrait tirer qu'elle-même.
-    if (others.length === 1 && R.includes(others[0])) return [others[0]];
-    return R;
+    return R.filter(c => allowed(g.excl, me, c) && hasMatching(g.excl, others, R.filter(r => r !== c)));
   }
 
   // ---------- Routage ----------
@@ -317,6 +354,7 @@
   function showCreate() {
     show('create', true);
     const names = [];
+    let excl = []; // [prénomQuiOffre, prénomInterdit]
     const render = () => {
       $('createList').innerHTML = '';
       names.forEach((n, i) => {
@@ -324,13 +362,50 @@
         li.textContent = n;
         const b = document.createElement('button');
         b.className = 'small'; b.textContent = '✕';
-        b.onclick = () => { names.splice(i, 1); render(); };
+        b.onclick = () => {
+          names.splice(i, 1);
+          excl = excl.filter(([a, c]) => a !== n && c !== n);
+          render();
+        };
         li.appendChild(b);
         $('createList').appendChild(li);
       });
       $('createCount').textContent = names.length ? names.length + ' participant(s)' : '';
       $('startBtn').disabled = names.length < 3;
       $('startBtn').textContent = names.length < 3 ? 'Ajoute au moins 3 noms' : 'Lancer le Secret Santa 🎁';
+
+      // Exclusions
+      show('exclBox', names.length >= 2);
+      for (const sid of ['exclA', 'exclB']) {
+        const sel = $(sid), cur = sel.value;
+        sel.innerHTML = '<option value="">— Prénom —</option>';
+        [...names].sort((a, b) => a.localeCompare(b, 'fr')).forEach(n => {
+          const o = document.createElement('option');
+          o.value = n; o.textContent = n;
+          sel.appendChild(o);
+        });
+        if (names.includes(cur)) sel.value = cur;
+      }
+      $('exclList').innerHTML = '';
+      excl.forEach(([a, c], i) => {
+        const li = document.createElement('li');
+        li.textContent = a + ' ne peut pas tirer ' + c;
+        const b = document.createElement('button');
+        b.className = 'small'; b.textContent = '✕';
+        b.onclick = () => { excl.splice(i, 1); render(); };
+        li.appendChild(b);
+        $('exclList').appendChild(li);
+      });
+    };
+    $('exclAdd').onclick = () => {
+      const a = $('exclA').value, c = $('exclB').value;
+      $('exclError').textContent = '';
+      if (!a || !c) { $('exclError').textContent = 'Choisis deux prénoms.'; return; }
+      if (a === c) { $('exclError').textContent = 'Choisis deux prénoms différents.'; return; }
+      const pairs = $('exclBoth').checked ? [[a, c], [c, a]] : [[a, c]];
+      pairs.forEach(p => { if (!excl.some(([x, y]) => x === p[0] && y === p[1])) excl.push(p); });
+      $('exclA').value = ''; $('exclB').value = '';
+      render();
     };
     $('createForm').onsubmit = e => {
       e.preventDefault();
@@ -348,13 +423,21 @@
     };
     $('startBtn').onclick = async () => {
       if (names.length < 3) return;
-      if (!confirm('Lancer le Secret Santa avec ' + names.length + ' participants ?')) return;
+      $('createError').textContent = '';
+      const obj = {}, idOf = {};
+      names.forEach(n => { const k = randId(8); obj[k] = n; idOf[n] = k; });
+      const exclObj = {};
+      excl.forEach(([a, c]) => { (exclObj[idOf[a]] = exclObj[idOf[a]] || {})[idOf[c]] = true; });
+      const all = Object.keys(obj);
+      if (!hasMatching(exclObj, all, all)) {
+        $('createError').textContent = "Avec ces exclusions, le tirage est impossible : quelqu'un n'aurait personne à tirer. Retire une ou plusieurs exclusions.";
+        return;
+      }
+      if (!confirm('Lancer le Secret Santa avec ' + names.length + ' participants' + (excl.length ? ' et ' + excl.length + ' exclusion(s)' : '') + ' ?')) return;
       $('startBtn').disabled = true;
       const id = randId(10), token = randId(12);
-      const obj = {};
-      names.forEach(n => obj[randId(8)] = n);
       try {
-        await set(ref(db, 'games/' + id), { names: obj, admin: token, created: Date.now() });
+        await set(ref(db, 'games/' + id), { names: obj, excl: exclObj, admin: token, created: Date.now() });
       } catch (e) {
         $('createError').textContent = "Erreur d'enregistrement : vérifie la config et les règles Firebase.";
         $('startBtn').disabled = false;
@@ -432,6 +515,7 @@
         if (Object.values(g.names).some(x => x.toLowerCase() === n.toLowerCase())) { msg = 'Ce nom est déjà dans la liste.'; return; }
         if (givers(g).length === 0) { msg = "Tout le monde a déjà tiré : la nouvelle personne ne pourrait tirer qu'elle-même. Annule d'abord le tirage de quelqu'un."; return; }
         g.names[randId(8)] = n;
+        if (!feasible(g)) { msg = "Impossible d'ajouter cette personne : avec les tirages déjà faits, elle n'aurait personne à tirer. Annule d'abord le tirage de quelqu'un."; return; }
         return g;
       });
       if (msg) $('addError').textContent = msg;
@@ -447,8 +531,12 @@
       const d = draws(g);
       if (id in d || Object.values(d).includes(id)) { msg = 'Cette personne est déjà impliquée dans un tirage.'; return; }
       delete g.names[id];
+      if (g.excl) {
+        delete g.excl[id];
+        Object.keys(g.excl).forEach(a => { delete g.excl[a][id]; });
+      }
       if (ids(g).length < 2) { msg = 'Il faut au moins 2 participants.'; return; }
-      if (!feasible(g)) { msg = "Impossible : la dernière personne restante ne pourrait tirer qu'elle-même."; return; }
+      if (!feasible(g)) { msg = "Impossible de retirer cette personne : avec les tirages déjà faits et les exclusions, quelqu'un n'aurait plus personne à tirer."; return; }
       return g;
     });
     $('addError').textContent = msg;
@@ -496,6 +584,18 @@
     });
     const total = ids(g).length, nDone = Object.keys(d).length;
     $('adminCount').textContent = nDone + ' / ' + total + ' ont tiré';
+
+    const ex = [];
+    Object.entries(g.excl || {}).forEach(([a, m]) => Object.keys(m || {}).forEach(c => {
+      if (g.names[a] && g.names[c]) ex.push(g.names[a] + ' ne peut pas tirer ' + g.names[c]);
+    }));
+    show('adminExclBox', ex.length > 0);
+    $('adminExcl').innerHTML = '';
+    ex.sort((x, y) => x.localeCompare(y, 'fr')).forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      $('adminExcl').appendChild(li);
+    });
   }
 
   // =====================================================================
